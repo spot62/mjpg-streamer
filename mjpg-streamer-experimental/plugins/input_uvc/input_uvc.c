@@ -69,6 +69,7 @@ static const struct {
 static globals *pglobal;
 static unsigned int minimum_size = 0;
 static int dynctrls = 1;
+static unsigned int stop_camera = 0;
 static unsigned int every = 1;
 
 static const struct {
@@ -165,8 +166,7 @@ int input_init(input_parameter *param, int id)
     while(1) {
         int option_index = 0, c = 0;
         static struct option long_options[] = {
-            {"h", no_argument, 0, 0
-            },
+            {"h", no_argument, 0, 0 },
             {"help", no_argument, 0, 0},
             {"d", required_argument, 0, 0},
             {"device", required_argument, 0, 0},
@@ -205,6 +205,8 @@ int input_init(input_parameter *param, int id)
             {"gain", required_argument, 0, 0},
             {"cagc", required_argument, 0, 0},
             {"cb", required_argument, 0, 0},
+            {"s", no_argument, 0, 0},
+            {"stop", no_argument, 0, 0},
             {0, 0, 0, 0}
         };
 
@@ -361,6 +363,14 @@ int input_init(input_parameter *param, int id)
             break;
         OPTION_INT_AUTO(38, cb)
             break;
+
+    	/* s, stop */
+        case 39:
+        case 40:
+		    DBG("case 39,40\n");
+		    stop_camera = 1;
+            break;
+
     
         default:
             DBG("default case\n");
@@ -414,6 +424,8 @@ int input_init(input_parameter *param, int id)
     } else {
         IPRINT("TV-Norm...........: DEFAULT\n");
     }
+
+    IPRINT("Stop camera feat..: %d\n", stop_camera);
 
     DBG("vdIn pn: %d\n", id);
     /* open video device and prepare data structure */
@@ -505,6 +517,7 @@ void help(void)
     " [-n | --no_dynctrl ]...: do not initalize dynctrls of Linux-UVC driver\n" \
     " [-l | --led ]..........: switch the LED \"on\", \"off\", let it \"blink\" or leave\n" \
     "                          it up to the driver using the value \"auto\"\n" \
+    " [-s | --stop ].........: stop camera when no active outputs\n" \
     " [-t | --tvnorm ] ......: set TV-Norm pal, ntsc or secam\n" \
     " [-u | --uyvy ] ........: Use UYVY format, default: MJPEG (uses more cpu power)\n" \
     " [-y | --yuv  ] ........: Use YUV format, default: MJPEG (uses more cpu power)\n" \
@@ -626,6 +639,21 @@ void *cam_thread(void *arg)
         while(pcontext->videoIn->streamingState == STREAMING_PAUSED) {
             usleep(1); // maybe not the best way so FIXME
         }
+
+        if(stop_camera == 1)
+        {
+    		/* check active outputs */
+    		pthread_mutex_lock(&pglobal->in[pcontext->id].out);
+    		if(pglobal->in[pcontext->id].num_outs == 0)
+    		{	
+    			/* stop camera */
+    			uvcStopGrab(pcontext->videoIn);
+    			/* wait for active outputs */
+    			pthread_cond_wait(&pglobal->in[pcontext->id].out_update, &pglobal->in[pcontext->id].out);
+    		}
+    		/* allow others to access the global buffer again */
+    		pthread_mutex_unlock(&pglobal->in[pcontext->id].out);
+    	}
 
         /* grab a frame */
         if(uvcGrab(pcontext->videoIn) < 0) {

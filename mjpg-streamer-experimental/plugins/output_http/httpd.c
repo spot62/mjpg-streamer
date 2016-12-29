@@ -1311,12 +1311,51 @@ void *client_thread(void *arg)
     switch(req.type) {
     case A_SNAPSHOT_WXP:
     case A_SNAPSHOT:
-        DBG("Request for snapshot from input: %d\n", input_number);
+        DBG("Request for snapshot from input: %d\n", input_number);      
+        pthread_mutex_lock(&pglobal->in[input_number].out);
+		pglobal->in[input_number].num_outs++;
+		if(pglobal->in[input_number].num_outs == 1)
+		{	
+			/* signal active outputs */
+			pthread_cond_broadcast(&pglobal->in[input_number].out_update);
+		}
+		/* allow others to access the global buffer again */
+		pthread_mutex_unlock(&pglobal->in[input_number].out);
+
         send_snapshot(&lcfd, input_number);
+     
+        pthread_mutex_lock(&pglobal->in[input_number].out);
+		if(pglobal->in[input_number].num_outs > 0)
+		{	
+			pglobal->in[input_number].num_outs--;
+		}
+		/* allow others to access the global buffer again */
+		pthread_mutex_unlock(&pglobal->in[input_number].out);
+ 
         break;
     case A_STREAM:
         DBG("Request for stream from input: %d\n", input_number);
+        
+        pthread_mutex_lock(&pglobal->in[input_number].out);
+		pglobal->in[input_number].num_outs++;
+		if(pglobal->in[input_number].num_outs == 1)
+		{	
+			/* signal active outputs */
+			pthread_cond_broadcast(&pglobal->in[input_number].out_update);
+		}
+		/* allow others to access the global buffer again */
+		pthread_mutex_unlock(&pglobal->in[input_number].out);
+
         send_stream(&lcfd, input_number);
+        
+        pthread_mutex_lock(&pglobal->in[input_number].out);
+		if(pglobal->in[input_number].num_outs > 0)
+		{	
+			pglobal->in[input_number].num_outs--;
+		}
+		/* allow others to access the global buffer again */
+		pthread_mutex_unlock(&pglobal->in[input_number].out);
+
         break;
     #ifdef WXP_COMPAT
     case A_STREAM_WXP:

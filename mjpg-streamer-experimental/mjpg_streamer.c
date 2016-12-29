@@ -114,6 +114,8 @@ static void signal_handler(int sig)
         global.out[i].stop(global.out[i].param.id);
         pthread_cond_destroy(&global.in[i].db_update);
         pthread_mutex_destroy(&global.in[i].db);
+	pthread_cond_destroy(&global.in[i].out_update);
+        pthread_mutex_destroy(&global.in[i].out);
         /*for (j = 0; j<MAX_PLUGIN_ARGUMENTS; j++) {
             if (global.out[i].param.argv[j] != NULL)
                 free(global.out[i].param.argv[j]);
@@ -301,11 +303,24 @@ int main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
 
+	    if(pthread_mutex_init(&global.in[i].out, NULL) != 0) {
+       	    LOG("could not initialize mutex variable\n");
+            closelog();
+            exit(EXIT_FAILURE);
+        }
+        
+        if(pthread_cond_init(&global.in[i].out_update, NULL) != 0) {
+            LOG("could not initialize condition variable\n");
+            closelog();
+            exit(EXIT_FAILURE);
+        }
+
         tmp = (size_t)(strchr(input[i], ' ') - input[i]);
         global.in[i].stop      = 0;
         global.in[i].context   = NULL;
         global.in[i].buf       = NULL;
         global.in[i].size      = 0;
+        global.in[i].num_outs  = 0;
         global.in[i].plugin = (tmp > 0) ? strndup(input[i], tmp) : strdup(input[i]);
         global.in[i].handle = dlopen(global.in[i].plugin, RTLD_LAZY);
         if(!global.in[i].handle) {

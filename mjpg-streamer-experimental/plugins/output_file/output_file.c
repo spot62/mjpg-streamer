@@ -47,6 +47,7 @@
 static pthread_t worker;
 static globals *pglobal;
 static int fd, delay, ringbuffer_size = -1, ringbuffer_exceed = 0, max_frame_size;
+static int stream_off_delay = 10000;
 static char *folder = "/tmp";
 static unsigned char *frame = NULL;
 static char *command = NULL;
@@ -194,6 +195,40 @@ void maintain_ringbuffer(int size)
 }
 
 /******************************************************************************
+Description.: Increase number of active outputs
+Input Value.: -
+Return Value: -
+******************************************************************************/
+static void ouput_inc(void)
+{
+	pthread_mutex_lock(&pglobal->in[input_number].out);
+    pglobal->in[input_number].num_outs++;
+    if(pglobal->in[input_number].num_outs == 1)
+    {
+		/* signal active outputs */
+        pthread_cond_broadcast(&pglobal->in[input_number].out_update);
+	}
+    /* allow others to access the global buffer again */
+    pthread_mutex_unlock(&pglobal->in[input_number].out);
+}
+
+/******************************************************************************
+Description.: Decrease number of active outputs
+Input Value.: -
+Return Value: -
+******************************************************************************/
+static void ouput_dec(void)
+{
+	pthread_mutex_lock(&pglobal->in[input_number].out);
+    if(pglobal->in[input_number].num_outs > 0)
+	{	
+		pglobal->in[input_number].num_outs--;
+	}
+    /* allow others to access the global buffer again */
+    pthread_mutex_unlock(&pglobal->in[input_number].out);
+}
+
+/******************************************************************************
 Description.: this is the main worker thread
               it loops forever, grabs a fresh frame and stores it to file
 Input Value.:
@@ -210,8 +245,15 @@ void *worker_thread(void *arg)
 
     /* set cleanup handler to cleanup allocated resources */
     pthread_cleanup_push(worker_cleanup, NULL);
+ 
+    // if delay is small, output_file is active output
+    if(delay <= stream_off_delay)
+        ouput_inc();
 
     while(ok >= 0 && !pglobal->stop) {
+		// if delay is large enough, output_file is not active output
+		if(delay > stream_off_delay) ouput_inc();  // stream on
+
         DBG("waiting for fresh frame\n");
 
         pthread_mutex_lock(&pglobal->in[input_number].db);
@@ -314,6 +356,9 @@ void *worker_thread(void *arg)
                 DBG("counter: %llu, will clean-up now\n", counter);
                 maintain_ringbuffer(ringbuffer_size);
             }
+            
+	    // if delay is large enough, output_file is not active output
+	    if(delay > stream_off_delay) ouput_dec();  // stream off
         } else { // recording to MJPG file
             /* save picture to file */
             if(write(fd, frame, frame_size) < 0) {

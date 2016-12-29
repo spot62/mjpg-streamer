@@ -152,6 +152,7 @@ int setResolution(struct vdIn *vd, int width, int height);
 
 int memcpy_picture(unsigned char *out, unsigned char *buf, int size);
 int uvcGrab(struct vdIn *vd);
+int uvcStopGrab(struct vdIn *vd);
 int close_v4l2(struct vdIn *vd);
 
 int v4l2GetControl(struct vdIn *vd, int control);

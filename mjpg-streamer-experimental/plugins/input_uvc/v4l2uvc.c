@@ -450,6 +450,7 @@ static int init_v4l2(struct vdIn *vd)
     /*
      * Queue the buffers.
      */
+#if 0
     for(i = 0; i < NB_BUFFER; ++i) {
         memset(&vd->buf, 0, sizeof(struct v4l2_buffer));
         vd->buf.index = i;
@@ -461,6 +462,7 @@ static int init_v4l2(struct vdIn *vd)
             goto fatal;;
         }
     }
+#endif
     return 0;
 fatal:
     return -1;
@@ -548,8 +550,21 @@ int uvcGrab(struct vdIn *vd)
 {
 #define HEADERFRAME1 0xaf
     int ret;
+	int i;
 
     if(vd->streamingState == STREAMING_OFF) {
+    	for(i = 0; i < NB_BUFFER; ++i) {
+    		memset(&vd->buf, 0, sizeof(struct v4l2_buffer));
+    		vd->buf.index = i;
+    		vd->buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    		vd->buf.memory = V4L2_MEMORY_MMAP;
+    		ret = xioctl(vd->fd, VIDIOC_QBUF, &vd->buf);
+    		if(ret < 0) {
+    			perror("Unable to queue buffer");
+    			goto err;
+    		}
+    	}
+
         if(video_enable(vd))
             goto err;
     }
@@ -611,6 +626,14 @@ int uvcGrab(struct vdIn *vd)
 err:
     vd->signalquit = 0;
     return -1;
+}
+
+int uvcStopGrab(struct vdIn *vd)
+{
+    if(vd->streamingState == STREAMING_ON)
+        video_disable(vd, STREAMING_OFF);
+        
+	return 0;
 }
 
 int close_v4l2(struct vdIn *vd)

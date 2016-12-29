@@ -69,6 +69,11 @@ struct _input {
     pthread_mutex_t db;
     pthread_cond_t  db_update;
 
+    /* signal acitve outputs */
+    pthread_mutex_t out;
+    pthread_cond_t  out_update;
+    int num_outs;
+
     /* global JPG frame, this is more or less the "database" */
     unsigned char *buf;
     int size;
